@@ -58,7 +58,11 @@ def http_get(url, timeout=HTTP_TIMEOUT):
 def fetch_index():
     with http_get(INDEX_URL) as response:
         body = response.read().decode('utf-8')
-        return json.loads(body)
+    raw_index = json.loads(body)
+    return {
+        info['version'] if 'version' in info else key: info
+        for key, info in raw_index.items()
+    }
 
 
 def format_size(size_in_bytes):
@@ -79,13 +83,13 @@ def query_zls(zig_version):
 
 def all_versions():
     index = fetch_index()
-    versions = [k for k in index.keys() if k != 'master']
-    versions.sort(key=lambda v: tuple(map(int, v.split('.'))))
-    return versions
+    return sorted(index.keys(), key=lambda x: index[x]['date'])
 
 
 def download_and_check(url, out_file, expected_shasum, total_size):
-    logging.info(f'Begin download tarball({format_size(total_size)}) from {url} to {out_file}...')
+    logging.info(
+        f'Begin download tarball({format_size(total_size)}) from {url} to {out_file}...'
+    )
     chunk_size = 1024 * 1024 * 2  # 2M chunks
     sha256_hash = hashlib.sha256()
     with http_get(url) as response:
@@ -143,8 +147,7 @@ def download(version, zig_outfile, zls_outfile):
     index = fetch_index()
     # Resolve 'latest' to the actual latest version
     if version == 'latest':
-        versions = list(k for k in index.keys() if k != 'master')
-        versions.sort(key=lambda v: tuple(map(int, v.split('.'))))
+        versions = sorted(index.keys(), key=lambda x: index[x]['date'])
         version = versions[-1]
     if version not in index:
         raise Exception(f'There is no such version: {version}')
